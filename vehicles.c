@@ -18,7 +18,7 @@ void* vehicle_routine(void* arg) {
     const char* tipo = v->is_emergency ? "EMERGENCIA" : "REGULAR";
     printf("[TIMESTAMP] [INFO] [VEHICULO %d] [%s] Inicia recorrido de %d intersecciones.\n", 
            v->id, tipo, v->num_intersections_to_cross);
-    
+           
     for (int i = 0; i < v->num_intersections_to_cross; i++) {
         int intersection_id = v->route[i];
         
@@ -28,13 +28,18 @@ void* vehicle_routine(void* arg) {
         enter_intersection(intersection_id, v->is_emergency, v->id);
         
         // Simular tiempo cruzando la interseccion
-        // Para emergencias cruzamos mas rapido
         if (v->is_emergency) {
             usleep(20 * 1000); // 20ms
         } else {
-            // Si el vehiculo regular detecta que hay emergencia esperando, puede abortar/acelerar
-            // Aqui simulamos que cruza normalmente
-            usleep((rand() % 50 + 30) * 1000); // 30ms - 80ms
+            // Priority Inheritance Implementation
+            // Si un vehiculo regular esta en la seccion critica y una emergencia se aproxima,
+            // hereda la prioridad temporalmente acelerando su cruce para liberar el recurso rapido.
+            if (intersections[intersection_id].emergency_approaching > 0) {
+                printf("[TIMESTAMP] [INFO] [VEHICULO %d] [REGULAR] ¡Acelerando cruce por ambulancia (Priority Inheritance)!\n", v->id);
+                usleep(5 * 1000); // Cruce expeditado
+            } else {
+                usleep((rand() % 50 + 30) * 1000); // 30ms - 80ms normal
+            }
         }
         
         leave_intersection(intersection_id, v->is_emergency, v->id);

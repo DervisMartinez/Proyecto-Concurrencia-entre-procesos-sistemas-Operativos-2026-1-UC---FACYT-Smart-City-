@@ -14,8 +14,12 @@ typedef struct {
     
     int vehicles_inside;
     int emergency_approaching;
+    
     int regular_waiting_count;
+    int regular_signaled_count;
+    
     int emergency_waiting_count;
+    int emergency_signaled_count;
     
     int deadlocks_avoided; 
     int regular_queued_by_emergency;

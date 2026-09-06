@@ -14,8 +14,13 @@ void init_intersections() {
         
         intersections[i].vehicles_inside = 0;
         intersections[i].emergency_approaching = 0;
+        
         intersections[i].regular_waiting_count = 0;
+        intersections[i].regular_signaled_count = 0;
+        
         intersections[i].emergency_waiting_count = 0;
+        intersections[i].emergency_signaled_count = 0;
+        
         intersections[i].deadlocks_avoided = 0;
         intersections[i].regular_queued_by_emergency = 0;
     }
@@ -37,39 +42,46 @@ void enter_intersection(int id, int is_emergency, int vehicle_id) {
         is->emergency_approaching++;
         printf("[TIMESTAMP] [INFO] [VEHICULO %d] [EMERGENCIA] Solicitando acceso a Interseccion %d. Vehiculos dentro: %d\n", vehicle_id, id, is->vehicles_inside);
         
-        if (is->vehicles_inside > 0) {
-            is->emergency_waiting_count++;
+        is->emergency_waiting_count++;
+        while (is->vehicles_inside > 0) {
             sem_post(&is->mutex);
-            // Wait until intersection is completely empty
             sem_wait(&is->emergency_sem);
             sem_wait(&is->mutex);
+            if (is->emergency_signaled_count > 0) is->emergency_signaled_count--;
         }
-        
+        is->emergency_waiting_count--;
         is->vehicles_inside++;
+        
         printf("[TIMESTAMP] [INFO] [VEHICULO %d] [EMERGENCIA] Entrando a Interseccion %d. (Cruce bloqueado para regulares)\n", vehicle_id, id);
-    } else {
-        // Logica de vehiculo regular
-        if (is->emergency_approaching > 0 || is->vehicles_inside >= MAX_CAPACITY) {
-            is->regular_waiting_count++;
+    } 
+    else {
+        is->regular_waiting_count++;
+        int deadlock_checked = 0;
+        
+        while (is->emergency_approaching > 0 || is->vehicles_inside >= MAX_CAPACITY) {
             if (is->emergency_approaching > 0) {
                 is->regular_queued_by_emergency++;
-                printf("[TIMESTAMP] [WARN] [VEHICULO %d] [REGULAR] Encolado en Interseccion %d debido a emergencia. Esperando...\n", vehicle_id, id);
-            } else {
-                // Simulacion de deteccion de deadlock (ej. 4 vehiculos esperando en una interseccion)
-                if (is->regular_waiting_count == 4 && is->vehicles_inside == 0) {
-                    is->deadlocks_avoided++;
-                    printf("[TIMESTAMP] [WARN] [SISTEMA] Deadlock evitado en Interseccion %d (4 vehiculos esperando). Cediendo paso ordenadamente.\n", id);
-                }
-                printf("[TIMESTAMP] [INFO] [VEHICULO %d] [REGULAR] Esperando acceso a Interseccion %d (Capacidad llena).\n", vehicle_id, id);
+            } else if (!deadlock_checked && is->regular_waiting_count >= 4 && is->vehicles_inside == 0) {
+                is->deadlocks_avoided++;
+                printf("[TIMESTAMP] [WARN] [SISTEMA] Deadlock evitado en Interseccion %d (4 vehiculos esperando). Cediendo paso ordenadamente.\n", id);
+                deadlock_checked = 1;
             }
             
             sem_post(&is->mutex);
             sem_wait(&is->regular_sem);
             sem_wait(&is->mutex);
+            if (is->regular_signaled_count > 0) is->regular_signaled_count--;
         }
         
+        is->regular_waiting_count--;
         is->vehicles_inside++;
         printf("[TIMESTAMP] [INFO] [VEHICULO %d] [REGULAR] Entrando a Interseccion %d. Vehiculos dentro: %d\n", vehicle_id, id, is->vehicles_inside);
+        
+        // Cascaded wakeup
+        if (is->emergency_approaching == 0 && is->vehicles_inside < MAX_CAPACITY && is->regular_waiting_count > is->regular_signaled_count) {
+            is->regular_signaled_count++;
+            sem_post(&is->regular_sem);
+        }
     }
     
     sem_post(&is->mutex);
@@ -88,22 +100,14 @@ void leave_intersection(int id, int is_emergency, int vehicle_id) {
         printf("[TIMESTAMP] [INFO] [VEHICULO %d] [REGULAR] Saliendo de Interseccion %d.\n", vehicle_id, id);
     }
     
-    // Politica de despertar hilos
-    if (is->emergency_waiting_count > 0 && is->vehicles_inside == 0) {
-        // Despertar emergencia si la interseccion esta vacia
-        is->emergency_waiting_count--;
+    // Wake up policy
+    if (is->emergency_waiting_count > is->emergency_signaled_count && is->vehicles_inside == 0) {
+        is->emergency_signaled_count++;
         sem_post(&is->emergency_sem);
     } 
-    else if (is->emergency_approaching == 0 && is->regular_waiting_count > 0 && is->vehicles_inside < MAX_CAPACITY) {
-        // Despertar vehiculos regulares si no hay emergencias
-        is->regular_waiting_count--;
+    else if (is->emergency_approaching == 0 && is->regular_waiting_count > is->regular_signaled_count && is->vehicles_inside < MAX_CAPACITY) {
+        is->regular_signaled_count++;
         sem_post(&is->regular_sem);
-        
-        // Dado que la capacidad es MAX_CAPACITY, podemos despertar a un segundo regular si la interseccion quedó vacía
-        if (is->vehicles_inside == 0 && is->regular_waiting_count > 0) {
-            is->regular_waiting_count--;
-            sem_post(&is->regular_sem);
-        }
     }
     
     sem_post(&is->mutex);
