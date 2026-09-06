@@ -4,8 +4,8 @@
 #include <string.h>
 
 int main(int argc, char* argv[]) {
-    int num_regular = 20;
-    int num_emergency = 2;
+    int num_regular = 20; // Vehículos autónomos regulares generados dinámicamente
+    int num_emergency = 2; // Vehículos de emergencia con prioridad absoluta
     
     // Parse arguments simple
     for (int i = 1; i < argc; i++) {
