@@ -1,0 +1,9 @@
+# Object files
+*.o
+
+# Executables
+smart_city
+smart_city.exe
+
+# Log files
+*.log

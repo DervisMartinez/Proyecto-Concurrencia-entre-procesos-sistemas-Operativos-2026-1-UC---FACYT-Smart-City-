@@ -1,10 +1,18 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -pthread -O2
+# ============================================================================
+# Makefile - Compilación del proyecto Smart City
+# ============================================================================
+# Uso:
+#   make          → Compila el proyecto
+#   make clean    → Elimina archivos compilados
+# ============================================================================
+
+CC      = gcc
+CFLAGS  = -Wall -Wextra -pthread -O2
 LDFLAGS = -pthread
 
-TARGET = smart_city
-
-OBJS = main.o intersection.o vehicles.o orchestrator.o
+TARGET  = smart_city
+SRCS    = main.c intersection.c vehicles.c orchestrator.c
+OBJS    = $(SRCS:.c=.o)
 
 all: $(TARGET)
 
