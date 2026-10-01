@@ -7,7 +7,7 @@
 # ============================================================================
 
 CC      = gcc
-CFLAGS  = -Wall -Wextra -pthread -O2
+CFLAGS  = -Wall -Wextra -pthread -O2 -g
 LDFLAGS = -pthread
 
 TARGET  = smart_city

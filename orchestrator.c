@@ -104,33 +104,33 @@ void run_simulation(int num_regular, int num_emergency) {
         pthread_create(&threads[idx], NULL, vehicle_routine, &args[idx]);
         idx++;
 
-        /* Retraso dinámico entre creación de vehículos (5-25ms) */
-        usleep((unsigned int)(thread_rand(&seed) % 20 + 5) * 1000);
+        /* Retraso entre creación de vehículos (100-300ms para visualización) */
+        usleep((unsigned int)(thread_rand(&seed) % 200 + 100) * 1000);
     }
 
     /*
      * Paso 3: Crear los hilos de vehículos de EMERGENCIA
      * ---------------------------------------------------
-     * Las emergencias cruzan las 5 intersecciones en orden (0→1→2→3→4)
-     * para maximizar la interacción con los regulares.
+     * Las emergencias cruzan 3 intersecciones aleatorias (igual que los
+     * regulares) para que la comparación de tiempos promedio sea JUSTA.
+     * La diferencia está en la VELOCIDAD de viaje y cruce, no en la
+     * cantidad de intersecciones.
      */
     for (int i = 0; i < num_emergency; i++) {
         args[idx].id                         = idx + 1;
         args[idx].is_emergency               = 1;
-        args[idx].num_intersections_to_cross  = NUM_INTERSECTIONS;
-        args[idx].route                      = malloc(sizeof(int) * NUM_INTERSECTIONS);
+        args[idx].num_intersections_to_cross  = 3;
+        args[idx].route                      = malloc(sizeof(int) * 3);
         args[idx].total_travel_time_ms       = 0;
 
-        /* Ruta fija: recorre todas las intersecciones en orden */
-        for (int j = 0; j < NUM_INTERSECTIONS; j++) {
-            args[idx].route[j] = j;
-        }
+        /* Ruta aleatoria de 3 intersecciones (sin repeticiones consecutivas) */
+        generate_route(args[idx].route, 3, &seed);
 
         pthread_create(&threads[idx], NULL, vehicle_routine, &args[idx]);
         idx++;
 
-        /* Separación entre emergencias (50ms) */
-        usleep(50 * 1000);
+        /* Separación entre emergencias (200ms para visualización) */
+        usleep(200 * 1000);
     }
 
     /*
