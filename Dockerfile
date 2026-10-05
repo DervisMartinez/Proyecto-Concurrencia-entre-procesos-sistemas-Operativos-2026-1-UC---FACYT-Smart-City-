@@ -11,13 +11,10 @@ FROM gcc:13-bookworm
 WORKDIR /app
 
 # Copiar todo el código fuente al contenedor
-COPY *.c *.h Makefile test_script.sh ./
-
-# Dar permisos de ejecución al script de prueba
-RUN chmod +x test_script.sh
+COPY *.c *.h Makefile ./
 
 # Compilar el proyecto durante el build (así se detectan errores antes)
 RUN make
 
-# Comando por defecto: ejecutar el script de pruebas completo
-CMD ["/bin/bash", "test_script.sh"]
+# Comando por defecto: ejecutar la simulación base
+CMD ["./smart_city"]
