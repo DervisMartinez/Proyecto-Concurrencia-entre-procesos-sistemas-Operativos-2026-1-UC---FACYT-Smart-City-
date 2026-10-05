@@ -22,6 +22,10 @@
 /* Parámetros de la simulación según el enunciado */
 #define NUM_INTERSECTIONS 5   /* 5 intersecciones de alta densidad            */
 #define MAX_CAPACITY      2   /* Solo 2 vehículos no colisionantes a la vez   */
+#define DEADLOCK_RISK_THRESHOLD 4 /* Vehículos compitiendo a la vez por un
+                                     cruce de 4 vías: sin control, cada uno
+                                     tomaría un cuadrante y esperaría por el
+                                     siguiente → espera circular (deadlock)   */
 
 /*
  * Estructura que representa una intersección.
@@ -52,8 +56,12 @@ typedef struct {
     int emergency_signaled;       /* Señales pendientes en emergency_queue    */
 
     /* --- Contadores de métricas para el reporte --- */
-    int deadlocks_avoided;        /* Veces que se detectó/evitó un posible
-                                     deadlock (ej: 4-way simultáneo)          */
+    int deadlocks_avoided;        /* Episodios en que 4 o más vehículos
+                                     compitieron a la vez por el cruce (4-way)
+                                     y el control de capacidad evitó la
+                                     espera circular                          */
+    int deadlock_risk_active;     /* 1 mientras dure el episodio actual de
+                                     riesgo (evita contarlo varias veces)     */
     int regular_queued_by_emergency; /* Veces que un regular fue encolado
                                         por paso de emergencia               */
 } Intersection;

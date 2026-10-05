@@ -33,6 +33,7 @@ void init_intersections(void) {
         intersections[i].emergency_signaled = 0;
 
         intersections[i].deadlocks_avoided          = 0;
+        intersections[i].deadlock_risk_active       = 0;
         intersections[i].regular_queued_by_emergency = 0;
     }
 }
@@ -84,6 +85,40 @@ static void signal_waiters(Intersection* inter) {
 }
 
 /*
+ * check_deadlock_risk()
+ * ---------------------
+ * Función auxiliar interna (se llama con el mutex tomado). Detecta el
+ * escenario clásico de 4 vehículos llegando a la vez a un cruce de 4 vías.
+ *
+ * Sin control, cada vehículo ocuparía su cuadrante y esperaría por el
+ * cuadrante del siguiente: espera circular → DEADLOCK. Este sistema lo
+ * evita porque el semáforo de capacidad solo admite MAX_CAPACITY (2)
+ * vehículos a la vez y el resto espera en cola, así que nunca se cierra
+ * el ciclo de espera.
+ *
+ * Demanda = vehículos dentro + vehículos bloqueados esperando turno.
+ * Se cuenta UN deadlock evitado por episodio: cuando la demanda alcanza
+ * el umbral. El episodio termina (y se rearma la detección) cuando la
+ * demanda vuelve a bajar del umbral en leave_intersection().
+ */
+static void check_deadlock_risk(Intersection* inter) {
+    int demand = inter->vehicles_inside
+               + inter->regular_waiting
+               + inter->emergency_waiting;
+
+    if (demand >= DEADLOCK_RISK_THRESHOLD && !inter->deadlock_risk_active) {
+        inter->deadlock_risk_active = 1;
+        inter->deadlocks_avoided++;
+        printf("[TIMESTAMP] [WARN] [SISTEMA] "
+               "Deadlock potencial evitado en Interseccion %d "
+               "(%d vehiculos compitiendo: %d dentro, %d esperando). "
+               "Cediendo paso ordenadamente.\n",
+               inter->id, demand, inter->vehicles_inside,
+               inter->regular_waiting + inter->emergency_waiting);
+    }
+}
+
+/*
  * enter_intersection()
  * --------------------
  * Un vehículo (regular o emergencia) solicita entrar a una intersección.
@@ -123,6 +158,7 @@ void enter_intersection(int intersection_id, int is_emergency, int vehicle_id) {
         /* Esperar a que la intersección se vacíe completamente */
         while (inter->vehicles_inside > 0) {
             inter->emergency_waiting++;
+            check_deadlock_risk(inter);        /* Detección de 4-way simultáneo */
             sem_post(&inter->mutex);           /* Soltar mutex antes de dormir */
             sem_wait(&inter->emergency_queue); /* BLOQUEARSE hasta ser señalizado */
             sem_wait(&inter->mutex);           /* Re-adquirir mutex */
@@ -163,19 +199,11 @@ void enter_intersection(int intersection_id, int is_emergency, int vehicle_id) {
                        inter->vehicles_inside, MAX_CAPACITY);
             }
 
-            /* Detección de potencial deadlock (4 regulares bloqueados) */
-            if (inter->regular_waiting >= 3 && inter->vehicles_inside == MAX_CAPACITY) {
-                inter->deadlocks_avoided++;
-                printf("[TIMESTAMP] [WARN] [SISTEMA] "
-                       "Deadlock potencial evitado en Interseccion %d "
-                       "(%d vehiculos esperando, %d dentro). "
-                       "Cediendo paso ordenadamente.\n",
-                       intersection_id,
-                       inter->regular_waiting + 1,
-                       inter->vehicles_inside);
-            }
-
             inter->regular_waiting++;
+
+            /* Detección de potencial deadlock (4-way simultáneo) */
+            check_deadlock_risk(inter);
+
             sem_post(&inter->mutex);          /* Soltar mutex antes de dormir */
             sem_wait(&inter->regular_queue);  /* BLOQUEARSE hasta ser señalizado */
             sem_wait(&inter->mutex);          /* Re-adquirir mutex */
@@ -217,6 +245,13 @@ void leave_intersection(int intersection_id, int is_emergency, int vehicle_id) {
     sem_wait(&inter->mutex);
 
     inter->vehicles_inside--;
+
+    /* Si la demanda bajó del umbral, termina el episodio de riesgo de
+       deadlock y se rearma la detección para el próximo */
+    if (inter->vehicles_inside + inter->regular_waiting
+        + inter->emergency_waiting < DEADLOCK_RISK_THRESHOLD) {
+        inter->deadlock_risk_active = 0;
+    }
 
     if (is_emergency) {
         inter->emergency_approaching--;
